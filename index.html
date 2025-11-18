@@ -34,30 +34,44 @@
 <body class="bg-gray-900 text-white min-h-screen p-4 flex flex-col items-center">
 
     <h1 class="text-3xl font-extrabold mb-6 text-teal-400">Web Vision AI Prototype</h1>
-    <p class="text-gray-400 mb-6 text-center">Backend running at <code class="bg-gray-800 p-1 rounded">http://localhost:8000</code></p>
+    <p class="text-gray-400 mb-6 text-center">Backend running at 
+        <code class="bg-gray-800 p-1 rounded">http://localhost:8000</code>
+    </p>
 
     <!-- Video/Canvas Container -->
     <div id="video-container" class="mb-6">
         <video id="webcam-video" autoplay playsinline class="w-full rounded-xl"></video>
         <canvas id="capture-canvas"></canvas>
-        <div id="loading-overlay" class="absolute inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center hidden">
-            <svg class="animate-spin -ml-1 mr-3 h-8 w-8 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+
+        <div id="loading-overlay" 
+             class="absolute inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center hidden">
+            <svg class="animate-spin -ml-1 mr-3 h-8 w-8 text-white" 
+                 xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" 
+                        stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" 
+                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 
+                      5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 
+                      3 7.938l3-2.647z"></path>
             </svg>
             <span class="text-xl font-medium">Analyzing...</span>
         </div>
     </div>
 
     <!-- Status Output -->
-    <div id="status-box" class="w-full max-w-lg bg-gray-800 p-4 rounded-lg text-center shadow-lg transition duration-300">
-        <p id="status-message" class="text-lg text-gray-300 font-medium">Click "Analyze Scene" to start camera and scan.</p>
+    <div id="status-box" 
+         class="w-full max-w-lg bg-gray-800 p-4 rounded-lg text-center shadow-lg transition duration-300">
+        <p id="status-message" class="text-lg text-gray-300 font-medium">
+            Click "Analyze Scene" to start camera and scan.
+        </p>
     </div>
 
     <!-- Action Button -->
     <button id="analyze-button" 
-            class="mt-8 px-8 py-4 bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-full shadow-2xl shadow-teal-500/50 transition duration-300 transform hover:scale-105 active:scale-95 disabled:opacity-50"
-            disabled>
+            class="mt-8 px-8 py-4 bg-teal-600 hover:bg-teal-700 
+                   text-white font-bold rounded-full shadow-2xl shadow-teal-500/50 
+                   transition duration-300 transform hover:scale-105 
+                   active:scale-95 disabled:opacity-50">
         Analyze Scene
     </button>
 
@@ -88,7 +102,7 @@
                 synth.cancel();
             }
             const utterance = new SpeechSynthesisUtterance(text);
-            utterance.rate = 0.8; // Speak a bit slower
+            utterance.rate = 0.8;
             synth.speak(utterance);
         }
 
@@ -96,11 +110,9 @@
 
         async function startCamera() {
             try {
-                // Request camera access
                 stream = await navigator.mediaDevices.getUserMedia({ video: true });
                 video.srcObject = stream;
                 
-                // Once metadata is loaded, set canvas size and enable button
                 video.onloadedmetadata = () => {
                     canvas.width = video.videoWidth;
                     canvas.height = video.videoHeight;
@@ -109,9 +121,9 @@
                 };
 
             } catch (err) {
-                updateStatus("Error accessing camera. Please ensure permissions are granted.", true);
-                console.error("Camera access error: ", err);
+                updateStatus("Error accessing camera. Please allow permissions.", true);
                 speak("Camera access failed. Check permissions.");
+                console.error("Camera access error: ", err);
             }
         }
         
@@ -128,21 +140,18 @@
             speak("Scanning.");
 
             try {
-                // 1. Draw the current video frame onto the hidden canvas
                 const ctx = canvas.getContext('2d');
-                // Draw mirrored image (like a webcam)
                 ctx.scale(-1, 1);
                 ctx.drawImage(video, 0, 0, -canvas.width, canvas.height);
-                ctx.scale(-1, 1); // Reset scale for next draw/text (optional)
+                ctx.scale(-1, 1);
 
-                // 2. Convert the canvas image to a JPEG Blob
-                const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.8));
+                const blob = await new Promise(resolve => 
+                    canvas.toBlob(resolve, 'image/jpeg', 0.8)
+                );
 
-                // 3. Prepare the Multipart Form Data
                 const formData = new FormData();
                 formData.append('file', blob, 'frame.jpg');
 
-                // 4. Send the request
                 const response = await fetch(SERVER_URL, {
                     method: 'POST',
                     body: formData,
@@ -152,14 +161,12 @@
                     throw new Error(`HTTP Error: ${response.status} ${response.statusText}`);
                 }
 
-                // 5. Process the JSON response
                 const data = await response.json();
                 processAndSpeak(data);
 
             } catch (error) {
-                updateStatus(`Network/Server Error: ${error.message}. Is your Python server running?`, true);
+                updateStatus(`Server error: ${error.message}`, true);
                 speak("The analysis server is unavailable.");
-                console.error("Analysis failed:", error);
             } finally {
                 isProcessing = false;
                 analyzeButton.disabled = false;
@@ -167,58 +174,57 @@
             }
         }
         
-        // --- Output Logic (Same logic as Flutter, but in JS) ---
+        // --- Output Logic with Distance (UPDATED) ---
         function processAndSpeak(data) {
             let messages = [];
 
-            // a. Objects & Distance
             const objects = data.objects || [];
-            const distances = data.distances || {};
 
             if (objects.length > 0) {
-                // Sort by distance (smaller value is closer based on proxy)
-                objects.sort((a, b) => (distances[a.label] || 100) - (distances[b.label] || 100));
-                
-                for(let i = 0; i < objects.length && i < 2; i++) {
-                    const label = objects[i].label;
-                    const dist = distances[label] || 0.0;
-                    
-                    let distancePhrase;
-                    if (dist < 2.5) {
-                        distancePhrase = "close ahead";
-                    } else if (dist < 5.0) {
-                        distancePhrase = "at medium distance";
+                // Sort by real distance
+                objects.sort((a, b) => 
+                    (a.distance_cm ?? 9999) - (b.distance_cm ?? 9999)
+                );
+
+                for (let i = 0; i < objects.length && i < 2; i++) {
+                    const obj = objects[i];
+                    const label = obj.label;
+                    const dcm = obj.distance_cm;
+
+                    let phrase = "";
+
+                    if (dcm !== null && dcm !== undefined) {
+                        if (dcm < 100) {
+                            phrase = `${Math.round(dcm)} centimeters ahead`;
+                        } else {
+                            phrase = `${(dcm/100).toFixed(1)} meters ahead`;
+                        }
                     } else {
-                        distancePhrase = "in the distance";
+                        phrase = "at unknown distance";
                     }
 
-                    messages.push(`Detected a ${label}, ${distancePhrase}.`);
+                    messages.push(`Detected a ${label}, ${phrase}.`);
                 }
             }
 
-            // b. Text (OCR)
             const texts = data.texts || [];
             if (texts.length > 0) {
                 messages.push(`Text found: ${texts[0]}.`);
             }
 
-            // c. Faces
             const faces = data.faces || [];
             if (faces.length > 0) {
-                messages.push(`Detected ${faces.length} face${faces.length > 1 ? 's' : ''}. Status unknown.`);
+                messages.push(`Detected ${faces.length} face${faces.length > 1 ? 's' : ''}.`);
             }
             
-            // Final output
             const finalMessage = messages.length === 0 
                 ? "No relevant objects, text, or faces detected." 
                 : messages.join(" ");
 
-            updateStatus(finalMessage, false);
+            updateStatus(finalMessage);
             speak(finalMessage);
         }
 
-
-        // Start camera when button is clicked (to respect browser security)
         analyzeButton.addEventListener('click', () => {
             if (!stream) {
                 startCamera();
@@ -227,9 +233,7 @@
             }
         });
 
-        // Initialize on page load (allow time for DOM to load)
         window.onload = () => {
-             // Button enabled only after the user interacts
              analyzeButton.disabled = false;
              updateStatus("Click 'Analyze Scene' to activate camera.");
         };
