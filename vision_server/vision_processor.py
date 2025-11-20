@@ -27,9 +27,18 @@ class VisionProcessor:
 
     def __init__(self):
         print("Loading AI Models... (This may take a moment on first run)")
-        
-        # 1. YOLOv8 Nano (object detection)
-        self.yolo = YOLO("yolov8n.pt")
+
+#-------------------------------------------------------        
+        # 1. YOLOv8 Nano (object detection): model use
+#-------------------------------------------------------  
+        # self.yolo = YOLO("yolov8n.pt")
+        self.yolo = YOLO("yolov8s.pt")
+        # results = self.yolo.track(
+        # source=0,
+        # show=True,
+        # tracker="bytetrack.yaml"
+        # )
+
         
         # 2. EasyOCR (text detection)
         self.ocr = easyocr.Reader(['en'])
