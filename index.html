@@ -3,48 +3,48 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Web Vision Prototype (Localhost)</title>
+    <title>Web Vision AI Real-Time</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        /* Use Inter font */
         body { font-family: 'Inter', sans-serif; }
-        /* Main container for video and canvas to ensure they stack nicely */
         #video-container {
             position: relative;
             width: 100%;
-            max-width: 600px; /* Limit size for desktop view */
+            max-width: 600px;
             margin: 0 auto;
             border-radius: 12px;
             overflow: hidden;
-            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 
+                        0 4px 6px -2px rgba(0, 0, 0, 0.05);
         }
-        /* Video element for live view */
         #webcam-video {
             display: block;
             width: 100%;
             height: auto;
-            transform: scaleX(-1); /* Mirror the webcam view */
+            transform: scaleX(-1);
         }
-        /* Canvas is used to capture the image but kept hidden */
         #capture-canvas {
+            display: none;
+        }
+        #loading-overlay {
+            position: absolute;
+            inset: 0;
+            background-color: rgba(17,17,17,0.75);
+            display: flex;
+            align-items: center;
+            justify-content: center;
             display: none;
         }
     </style>
 </head>
 <body class="bg-gray-900 text-white min-h-screen p-4 flex flex-col items-center">
 
-    <h1 class="text-3xl font-extrabold mb-6 text-teal-400">Web Vision AI Prototype</h1>
-    <p class="text-gray-400 mb-6 text-center">Backend running at 
-        <code class="bg-gray-800 p-1 rounded">http://localhost:8000</code>
-    </p>
+    <h1 class="text-3xl font-extrabold mb-6 text-teal-400">Web Vision AI Real-Time</h1>
 
-    <!-- Video/Canvas Container -->
     <div id="video-container" class="mb-6">
         <video id="webcam-video" autoplay playsinline class="w-full rounded-xl"></video>
         <canvas id="capture-canvas"></canvas>
-
-        <div id="loading-overlay" 
-             class="absolute inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center hidden">
+        <div id="loading-overlay">
             <svg class="animate-spin -ml-1 mr-3 h-8 w-8 text-white" 
                  xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                 <circle class="opacity-25" cx="12" cy="12" r="10" 
@@ -58,186 +58,124 @@
         </div>
     </div>
 
-    <!-- Status Output -->
     <div id="status-box" 
          class="w-full max-w-lg bg-gray-800 p-4 rounded-lg text-center shadow-lg transition duration-300">
         <p id="status-message" class="text-lg text-gray-300 font-medium">
-            Click "Analyze Scene" to start camera and scan.
+            Initializing camera...
         </p>
     </div>
-
-    <!-- Action Button -->
-    <button id="analyze-button" 
-            class="mt-8 px-8 py-4 bg-teal-600 hover:bg-teal-700 
-                   text-white font-bold rounded-full shadow-2xl shadow-teal-500/50 
-                   transition duration-300 transform hover:scale-105 
-                   active:scale-95 disabled:opacity-50">
-        Analyze Scene
-    </button>
 
     <script>
         const video = document.getElementById('webcam-video');
         const canvas = document.getElementById('capture-canvas');
         const statusMessage = document.getElementById('status-message');
-        const analyzeButton = document.getElementById('analyze-button');
         const loadingOverlay = document.getElementById('loading-overlay');
-        const statusBox = document.getElementById('status-box');
-        
+        const synth = window.speechSynthesis;
+
+        const SERVER_URL = "http://localhost:8000/analyze-frame";
         let stream = null;
         let isProcessing = false;
-        const synth = window.speechSynthesis;
-        
-        const SERVER_URL = "http://localhost:8000/analyze-frame";
+        let lastAnnounced = "";
+        const PROCESS_INTERVAL_MS = 1000; // analyze every 1 second
 
-        // --- TTS and Status Helpers ---
-
-        function updateStatus(message, isError = false) {
+        function updateStatus(message) {
             statusMessage.textContent = message;
-            statusBox.classList.toggle('bg-red-700', isError);
-            statusBox.classList.toggle('bg-gray-800', !isError);
         }
 
         function speak(text) {
-            if (synth.speaking) {
-                synth.cancel();
-            }
+            if (synth.speaking) synth.cancel();
             const utterance = new SpeechSynthesisUtterance(text);
             utterance.rate = 0.8;
             synth.speak(utterance);
         }
 
-        // --- Camera Initialization ---
-
         async function startCamera() {
             try {
                 stream = await navigator.mediaDevices.getUserMedia({ video: true });
                 video.srcObject = stream;
-                
+
                 video.onloadedmetadata = () => {
                     canvas.width = video.videoWidth;
                     canvas.height = video.videoHeight;
-                    analyzeButton.disabled = false;
-                    updateStatus("Camera ready. Point and click 'Analyze Scene'.");
+                    updateStatus("Camera ready. Scanning continuously...");
+                    continuousAnalyze();
                 };
-
             } catch (err) {
                 updateStatus("Error accessing camera. Please allow permissions.", true);
-                speak("Camera access failed. Check permissions.");
-                console.error("Camera access error: ", err);
+                console.error(err);
             }
         }
-        
-        // --- Core Analysis Function ---
 
-        async function analyzeFrame() {
-            if (isProcessing) return;
+        async function continuousAnalyze() {
+            if (!stream) return;
 
-            isProcessing = true;
-            analyzeButton.disabled = true;
-            loadingOverlay.classList.remove('hidden');
+            setInterval(async () => {
+                if (isProcessing) return;
+                isProcessing = true;
 
-            updateStatus("Capturing and sending frame to AI server...");
-            speak("Scanning.");
+                try {
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-            try {
-                const ctx = canvas.getContext('2d');
-                ctx.scale(-1, 1);
-                ctx.drawImage(video, 0, 0, -canvas.width, canvas.height);
-                ctx.scale(-1, 1);
+                    const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.8));
+                    const formData = new FormData();
+                    formData.append('file', blob, 'frame.jpg');
 
-                const blob = await new Promise(resolve => 
-                    canvas.toBlob(resolve, 'image/jpeg', 0.8)
-                );
+                    const response = await fetch(SERVER_URL, { method: 'POST', body: formData });
+                    if (!response.ok) throw new Error("Server error");
 
-                const formData = new FormData();
-                formData.append('file', blob, 'frame.jpg');
+                    const data = await response.json();
 
-                const response = await fetch(SERVER_URL, {
-                    method: 'POST',
-                    body: formData,
-                });
+                    // --- Process Objects ---
+                    const objects = data.objects || [];
+                    let messages = [];
 
-                if (!response.ok) {
-                    throw new Error(`HTTP Error: ${response.status} ${response.statusText}`);
-                }
-
-                const data = await response.json();
-                processAndSpeak(data);
-
-            } catch (error) {
-                updateStatus(`Server error: ${error.message}`, true);
-                speak("The analysis server is unavailable.");
-            } finally {
-                isProcessing = false;
-                analyzeButton.disabled = false;
-                loadingOverlay.classList.add('hidden');
-            }
-        }
-        
-        // --- Output Logic with Distance (UPDATED) ---
-        function processAndSpeak(data) {
-            let messages = [];
-
-            const objects = data.objects || [];
-
-            if (objects.length > 0) {
-                // Sort by real distance
-                objects.sort((a, b) => 
-                    (a.distance_cm ?? 9999) - (b.distance_cm ?? 9999)
-                );
-
-                for (let i = 0; i < objects.length && i < 2; i++) {
-                    const obj = objects[i];
-                    const label = obj.label;
-                    const dcm = obj.distance_cm;
-
-                    let phrase = "";
-
-                    if (dcm !== null && dcm !== undefined) {
-                        if (dcm < 100) {
-                            phrase = `${Math.round(dcm)} centimeters ahead`;
-                        } else {
-                            phrase = `${(dcm/100).toFixed(1)} meters ahead`;
+                    if (objects.length > 0) {
+                        objects.sort((a, b) => (a.distance_cm ?? 9999) - (b.distance_cm ?? 9999));
+                        const obj = objects[0]; // closest object
+                        const announcement = obj.label;
+                        const d = obj.distance_cm;
+                        let phrase = "";
+                        if (d !== undefined && d !== null) {
+                            phrase = d < 100 ? `${Math.round(d)} cm ahead` : `${(d/100).toFixed(1)} meters ahead`;
                         }
-                    } else {
-                        phrase = "at unknown distance";
+                        const objMessage = `Detected ${announcement}, ${phrase}`;
+                        messages.push(objMessage);
+
+                        if (announcement !== lastAnnounced) {
+                            speak(objMessage);
+                            lastAnnounced = announcement;
+                        }
                     }
 
-                    messages.push(`Detected a ${label}, ${phrase}.`);
+                    // --- Process Texts ---
+                    const texts = data.texts || [];
+                    if (texts.length > 0) {
+                        messages.push(`Text found: ${texts[0]}`);
+                    }
+
+                    // --- Process Faces ---
+                    const faces = data.faces || [];
+                    if (faces.length > 0) {
+                        messages.push(`Detected ${faces.length} face${faces.length > 1 ? 's' : ''}`);
+                    }
+
+                    const finalMessage = messages.length === 0 
+                        ? "No relevant objects, text, or faces detected."
+                        : messages.join(". ");
+
+                    updateStatus(finalMessage);
+
+                } catch (err) {
+                    console.error(err);
+                    updateStatus("Error during analysis.");
+                } finally {
+                    isProcessing = false;
                 }
-            }
-
-            const texts = data.texts || [];
-            if (texts.length > 0) {
-                messages.push(`Text found: ${texts[0]}.`);
-            }
-
-            const faces = data.faces || [];
-            if (faces.length > 0) {
-                messages.push(`Detected ${faces.length} face${faces.length > 1 ? 's' : ''}.`);
-            }
-            
-            const finalMessage = messages.length === 0 
-                ? "No relevant objects, text, or faces detected." 
-                : messages.join(" ");
-
-            updateStatus(finalMessage);
-            speak(finalMessage);
+            }, PROCESS_INTERVAL_MS);
         }
 
-        analyzeButton.addEventListener('click', () => {
-            if (!stream) {
-                startCamera();
-            } else {
-                analyzeFrame();
-            }
-        });
-
-        window.onload = () => {
-             analyzeButton.disabled = false;
-             updateStatus("Click 'Analyze Scene' to activate camera.");
-        };
-
+        window.onload = () => startCamera();
     </script>
 </body>
 </html>
