@@ -91,7 +91,7 @@ async def analyze_frame(file: UploadFile = File(...)):
 # 6. Run Server
 # ------------------------------
 if __name__ == "__main__":
-    # Get local IP address
+    # Local IP address
     try:
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         s.connect(("8.8.8.8", 80))
