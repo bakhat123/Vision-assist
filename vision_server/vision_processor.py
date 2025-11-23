@@ -32,7 +32,9 @@ class VisionProcessor:
         # 1. YOLOv8 Nano (object detection): model use
 #-------------------------------------------------------  
         # self.yolo = YOLO("yolov8n.pt")
-        self.yolo = YOLO("yolov8s.pt")
+        # self.yolo = YOLO("yolov8s.pt")
+        # self.yolo = YOLO("yolov8m.pt")
+        self.yolo = YOLO("yolov8x.pt")
         # results = self.yolo.track(
         # source=0,
         # show=True,
