@@ -26,6 +26,14 @@
         #capture-canvas {
             display: none;
         }
+        #overlay-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
         #loading-overlay {
             position: absolute;
             inset: 0;
@@ -44,6 +52,7 @@
     <div id="video-container" class="mb-6">
         <video id="webcam-video" autoplay playsinline class="w-full rounded-xl"></video>
         <canvas id="capture-canvas"></canvas>
+        <canvas id="overlay-canvas"></canvas>
         <div id="loading-overlay">
             <svg class="animate-spin -ml-1 mr-3 h-8 w-8 text-white" 
                  xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -68,11 +77,13 @@
     <script>
         const video = document.getElementById('webcam-video');
         const canvas = document.getElementById('capture-canvas');
+        const overlay = document.getElementById('overlay-canvas');
+        const octx = overlay.getContext('2d');
         const statusMessage = document.getElementById('status-message');
         const loadingOverlay = document.getElementById('loading-overlay');
         const synth = window.speechSynthesis;
 
-        const SERVER_URL = "https://10.7.33.86:8443/analyze-frame";
+        const SERVER_URL = "https://10.7.33.86:8443/analyze-frame"; // replace with your backend
         let stream = null;
         let isProcessing = false;
         let lastAnnounced = "";
@@ -89,6 +100,24 @@
             synth.speak(utterance);
         }
 
+        function drawBoxes(objects) {
+            octx.clearRect(0, 0, overlay.width, overlay.height);
+
+            objects.forEach(obj => {
+                const [x1, y1, x2, y2] = obj.bbox;
+                const label = obj.label;
+                const distance = obj.distance_cm ?? obj.distance_m ?? "N/A";
+
+                octx.strokeStyle = 'red';
+                octx.lineWidth = 2;
+                octx.strokeRect(x1, y1, x2 - x1, y2 - y1);
+
+                octx.fillStyle = 'red';
+                octx.font = "16px Arial";
+                octx.fillText(`${label} (${distance} cm)`, x1, y1 - 5);
+            });
+        }
+
         async function startCamera() {
             try {
                 stream = await navigator.mediaDevices.getUserMedia({ video: true });
@@ -97,11 +126,14 @@
                 video.onloadedmetadata = () => {
                     canvas.width = video.videoWidth;
                     canvas.height = video.videoHeight;
+                    overlay.width = video.videoWidth;
+                    overlay.height = video.videoHeight;
+
                     updateStatus("Camera ready. Scanning continuously...");
                     continuousAnalyze();
                 };
             } catch (err) {
-                updateStatus("Error accessing camera. Please allow permissions.", true);
+                updateStatus("Error accessing camera. Please allow permissions.");
                 console.error(err);
             }
         }
@@ -125,11 +157,14 @@
                     if (!response.ok) throw new Error("Server error");
 
                     const data = await response.json();
-
-                    // --- Process Objects ---
                     const objects = data.objects || [];
+
+                    // Draw bounding boxes
+                    drawBoxes(objects);
+
                     let messages = [];
 
+                    // Announce closest object
                     if (objects.length > 0) {
                         objects.sort((a, b) => (a.distance_cm ?? 9999) - (b.distance_cm ?? 9999));
                         const obj = objects[0]; // closest object
@@ -148,13 +183,13 @@
                         }
                     }
 
-                    // --- Process Texts ---
+                    // Process Texts
                     const texts = data.texts || [];
                     if (texts.length > 0) {
                         messages.push(`Text found: ${texts[0]}`);
                     }
 
-                    // --- Process Faces ---
+                    // Process Faces
                     const faces = data.faces || [];
                     if (faces.length > 0) {
                         messages.push(`Detected ${faces.length} face${faces.length > 1 ? 's' : ''}`);
